@@ -1,0 +1,109 @@
+#include <OneWire.h>
+#include <Wire.h>
+#include <DallasTemperature.h>
+// libraries used
+
+float calibration_value = 21.34;
+int phval = 0; 
+unsigned long int avgval; 
+int buffer_arr[10],temp;
+
+namespace pin {
+const byte tds_sensor = A2;
+const byte one_wire_bus = A3; // Dallas Temperature Sensor
+}
+
+namespace device {
+float aref = 4.3;
+}
+
+namespace sensor {
+float ec = 0;
+unsigned int tds = 0;
+float waterTemp = 0;
+float ecCalibration = 1;
+int Turbidity;
+float Output2;
+}
+
+// variables used
+
+OneWire oneWire(pin::one_wire_bus);
+DallasTemperature dallasTemperature(&oneWire);
+
+// variables for libraries that are going to be initialized
+
+
+void setup() {
+  Serial.begin(9600); // Dubugging on hardware Serial 0
+  dallasTemperature.begin();
+  delay(1000);
+  Serial.println("pH Turbidity TDS Temperature"); 
+ 
+  // Initializes Arduino and sensors which detects every second
+}
+
+
+void loop() {
+  readTdsQuick();
+  readpHQuick();
+  readTurbidityQuick();
+  // custom functions setup to detect pH, turbidity, and TDS
+  
+  Serial.print(" ");
+  Serial.print(sensor::Output2);
+  Serial.print(" ");
+  Serial.print(sensor::tds);
+  Serial.print(" ");
+  Serial.print(sensor::waterTemp,2);
+  Serial.println("");
+  
+  // values printed to the serial monitor for reading values
+}
+
+void readTdsQuick() {
+  dallasTemperature.requestTemperatures();
+  sensor::waterTemp = dallasTemperature.getTempCByIndex(0);
+  float rawEc = analogRead(pin::tds_sensor) * device::aref / 1024.0;
+  float temperatureCoefficient = 1.0 + 0.02 * (sensor::waterTemp - 25.0);
+  sensor::ec = (rawEc / temperatureCoefficient) * sensor::ecCalibration;
+  sensor::tds = (133.42 * pow(sensor::ec, 3) - 255.86 * sensor::ec * sensor::ec + 857.39 * sensor::ec) * 0.5;
+
+// converts analog value of the millivoltage of TDS and uses a formula to convert into values in parts per million  
+}
+
+void readpHQuick () {
+  for(int i=0;i<10;i++) 
+ { 
+ buffer_arr[i]=analogRead(A0);
+ delay(30);
+ }
+ for(int i=0;i<9;i++)
+ {
+ for(int j=i+1;j<10;j++)
+ {
+ if(buffer_arr[i]>buffer_arr[j])
+ {
+ temp=buffer_arr[i];
+ buffer_arr[i]=buffer_arr[j];
+ buffer_arr[j]=temp;
+ }
+ }
+ }
+ avgval=0;
+ for(int i=2;i<8;i++)
+ avgval+=buffer_arr[i];
+ float volt=(float)avgval*5.0/1024/3 // adjust as needed depending on the initial analog value of pH sensor;
+ float ph_act = -5.70 * volt + calibration_value;
+
+ Serial.print(ph_act);
+ // converts analog values of the millivoltage of pH and uses a formula for readable values
+ //Measures logarithmically
+}
+
+void readTurbidityQuick() {
+sensor::Turbidity = analogRead (A1);
+    sensor::Output2 = map(sensor::Turbidity, 0, 700, 100, 0); // adjust as needed depending on the initial analog value of turbidity sensor
+	
+	// converts the range of values by the turbidity sensor into nephelometric turbidity units (NTU)
+}
